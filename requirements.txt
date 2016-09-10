@@ -1,0 +1,2 @@
+# you should have python-uno installed and make a virtual env with
+# mkvirtualenv amort -p /usr/bin/python3 --system-site-packages
