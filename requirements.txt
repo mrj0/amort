@@ -1,2 +1,5 @@
 # you should have python-uno installed and make a virtual env with
 # mkvirtualenv amort -p /usr/bin/python3 --system-site-packages
+
+# run: soffice --headless --accept="socket,host=127.0.0.1,port=2002;urp;" --nofirststartwizard
+Django==1.10.1

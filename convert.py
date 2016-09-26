@@ -4,6 +4,7 @@ import argparse
 import decimal
 import os
 import sys
+import logging
 from decimal import Decimal, getcontext
 
 import uno
@@ -29,10 +30,63 @@ class OutputStream(Base, XOutputStream):
         pass
 
 
-if __name__ == '__main__':
+def to_pdf(workbook, name, price, term, rate, down, down_percent, dest):
     getcontext().prec = 8
     getcontext().rounding = decimal.ROUND_HALF_UP
 
+    # get the uno component context from the PyUNO runtime
+    local_context = uno.getComponentContext()
+
+    # create the UnoUrlResolver
+    resolver = local_context.ServiceManager.createInstanceWithContext("com.sun.star.bridge.UnoUrlResolver", local_context)
+
+    # connect to the running office
+    ctx = resolver.resolve("uno:socket,host=localhost,port=2002;urp;StarOffice.ComponentContext")
+    manager = ctx.ServiceManager
+
+    # get the central desktop object
+    desktop = manager.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
+
+    cwd = systemPathToFileUrl(os.getcwd())
+    url = absolutize(cwd, systemPathToFileUrl(workbook))
+    logging.info('Opening url', url)
+
+    doc = desktop.loadComponentFromURL(url, "_blank", 0, open_props)
+
+    try:
+        monthly = doc.getSheets().getByIndex(0)
+        yearly = doc.getSheets().getByIndex(1)
+        monthly.getCellRangeByName('c2').setString(name)
+        yearly.getCellRangeByName('c2').setString(name)
+
+        monthly.getCellRangeByName('f4').setValue(price)
+        monthly.getCellRangeByName('f7').setValue(term)
+
+        monthly.getCellRangeByName('f8').setValue(str(Decimal(rate) / 100))
+
+        if down:
+            monthly.getCellRangeByName('g5').setValue(down)
+            percent = Decimal(down) / Decimal(price)
+            logging.info('setting percent', percent * 100)
+            monthly.getCellRangeByName('f5').setValue(str(percent))
+        if down_percent:
+            monthly.getCellRangeByName('f5').setValue(str(Decimal(down_percent) / 100))
+            down = Decimal(price) * (Decimal(down_percent) / 100)
+            logging.info('setting down', down)
+            monthly.getCellRangeByName('g5').setValue(str(down))
+
+        outProps = (
+            PropertyValue("FilterName", 0, PDF_FILTER, 0),
+            PropertyValue("Overwrite", 0, True, 0),
+            PropertyValue("OutputStream", 0, OutputStream(), 0)
+        )
+        destUrl = absolutize(cwd, systemPathToFileUrl(dest))
+        doc.storeToURL(destUrl, outProps)
+    finally:
+        doc.dispose()
+
+
+if __name__ == '__main__':
     parser = argparse.ArgumentParser('convert.py')
 
     parser.add_argument("-n", "--name", help="Prepared for name", default='test')
@@ -53,54 +107,3 @@ if __name__ == '__main__':
     if not args.down_percent and not args.down:
         print('You should specify --down or --down-percent, assuming 20%')
         args.down_percent = '20'
-
-    # get the uno component context from the PyUNO runtime
-    local_context = uno.getComponentContext()
-
-    # create the UnoUrlResolver
-    resolver = local_context.ServiceManager.createInstanceWithContext("com.sun.star.bridge.UnoUrlResolver", local_context)
-
-    # connect to the running office
-    ctx = resolver.resolve("uno:socket,host=localhost,port=2002;urp;StarOffice.ComponentContext")
-    manager = ctx.ServiceManager
-
-    # get the central desktop object
-    desktop = manager.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
-
-    cwd = systemPathToFileUrl(os.getcwd())
-    url = absolutize(cwd, systemPathToFileUrl(args.workbook))
-    print('Opening url', url)
-
-    doc = desktop.loadComponentFromURL(url, "_blank", 0, open_props)
-
-    try:
-        monthly = doc.getSheets().getByIndex(0)
-        yearly = doc.getSheets().getByIndex(1)
-        monthly.getCellRangeByName('c2').setString(args.name)
-        yearly.getCellRangeByName('c2').setString(args.name)
-
-        monthly.getCellRangeByName('f4').setValue(args.price)
-        monthly.getCellRangeByName('f7').setValue(args.term)
-
-        monthly.getCellRangeByName('f8').setValue(str(Decimal(args.rate) / 100))
-
-        if args.down:
-            monthly.getCellRangeByName('g5').setValue(args.down)
-            percent = Decimal(args.down) / Decimal(args.price)
-            print('setting percent', percent * 100)
-            monthly.getCellRangeByName('f5').setValue(str(percent))
-        if args.down_percent:
-            monthly.getCellRangeByName('f5').setValue(str(Decimal(args.down_percent) / 100))
-            down = Decimal(args.price) * (Decimal(args.down_percent) / 100)
-            print('setting down', down)
-            monthly.getCellRangeByName('g5').setValue(str(down))
-
-        outProps = (
-            PropertyValue("FilterName", 0, PDF_FILTER, 0),
-            PropertyValue("Overwrite", 0, True, 0),
-            PropertyValue("OutputStream", 0, OutputStream(), 0)
-        )
-        destUrl = absolutize(cwd, systemPathToFileUrl(args.dest))
-        doc.storeToURL(destUrl, outProps)
-    finally:
-        doc.dispose()

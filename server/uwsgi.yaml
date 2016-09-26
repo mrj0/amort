@@ -1,0 +1,16 @@
+# uwsgi --yaml ./server/uwsgi.yaml
+uwsgi:
+  env: DJANGO_SETTINGS_MODULE=amort.settings
+  chdir: /home/amort/amort
+  python-path: /home/amort/amort
+  module: amort.wsgi:app
+  home: /home/amort/.virtualenvs/amort.env
+  touch-reload: /home/amort/tundra-admin/server/uwsgi.yaml
+  plugin: python
+  master: true
+  processes: 10
+  socket: /home/amort/tundra_admin.sock
+  limit-as: 512
+  chmod-socket: 777
+  vacuum: true
+  daemonize: /home/amort/log/uwsgi/tundra_admin.log
